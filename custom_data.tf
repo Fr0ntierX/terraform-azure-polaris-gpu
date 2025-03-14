@@ -14,16 +14,25 @@ locals {
       port            = "8000"
       url_for_proxy   = "vllm-workload:8000"
       extra_args      = "-e HF_TOKEN=${var.vllmWorkloadHfToken} -e POLARIS_VLLM_MODEL=${var.vllmWorkloadVllmModel}"
-      container_image = "fr0ntierxpublicdev.azurecr.io/polaris-llm-gpu-vllm:latest"
+      container_image = "fr0ntierxpublic.azurecr.io/polaris-llm-gpu-vllm:latest"
       command         = ""
     }
-    ollama = {
+    ollamaWorkload = {
       name            = "ollama"
       port            = "11434"
       url_for_proxy   = "ollama:11434"
       extra_args      = "-e POLARIS_LLM_OLLAMA_MODEL=${var.ollamaModelName}"
-      container_image = "fr0ntierxpublicdev.azurecr.io/polaris-llm-gpu-ollama:latest"
+      container_image = "fr0ntierxpublic.azurecr.io/polaris-llm-gpu-ollama:latest"
       command         = ""
+    }
+    torchServeWorkload = {
+      name            = "workload"
+      port            = "8080"
+      url_for_proxy   = "workload:8080"
+      extra_args      = "-e POLARIS_AI_MAR_FILE_URL=${var.modelArchiveUrl}"
+      container_image = "fr0ntierxpublic.azurecr.io/polaris-ai-gpu-torchserve:latest"
+      command         = ""
+    #   gpus_required   = true
     }
   }
 
@@ -74,16 +83,16 @@ locals {
         fr0ntierxpublic.azurecr.io/polaris-proxy${startswith(var.polarisProxyImageVersion, "@sha256") ? var.polarisProxyImageVersion : ":${var.polarisProxyImageVersion}"}
     EOT
 
-    run_workload = <<-EOT
-      docker run -d \
-        --network secure-network \
-        --name ${local.selected_workload.name} \
-        -p ${local.selected_workload.port}:${local.selected_workload.port} \
-        ${local.selected_workload.extra_args} \
-        ${var.workloadType != "customWorkload" ? "--restart=always --gpus all" : ""} \
-        ${local.selected_workload.container_image} \
-        ${local.selected_workload.command != "" ? local.selected_workload.command : ""}
-    EOT
+run_workload = <<-EOT
+  docker run -d \
+    --network secure-network \
+    --name ${local.selected_workload.name} \
+    -p ${local.selected_workload.port}:${local.selected_workload.port} \
+    ${local.selected_workload.extra_args} \
+    --restart=always -it --gpus all \
+    ${local.selected_workload.container_image} \
+    ${local.selected_workload.command}
+EOT
 
     run_client = var.clientWorkloadImageAddress != "" ? format(
       "docker run -d --network secure-network --name client-workload -p %s:%s %s %s %s %s",
