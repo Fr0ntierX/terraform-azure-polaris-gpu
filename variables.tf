@@ -48,12 +48,6 @@ variable "vm_size" {
   description = "The size of the VM"
 }
 
-variable "image_id" {
-  type        = string
-  default     = "/CommunityGalleries/polaris-e3c4198b-d4a4-42b2-b41d-25368bd3d7a1/Images/polaris-confidential-gpu-h100-2204/Versions/latest"
-  description = "The source image for the VM"
-}
-
 # Workload Types
 variable "workload_type" {
   type        = string
