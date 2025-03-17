@@ -1,5 +1,5 @@
 resource "azurerm_virtual_network" "main" {
-  count               = var.virtual_network_new_or_existing == "new" ? 1 : 0
+  count               = var.virtual_network == "new" ? 1 : 0
   name                = var.virtual_network_name
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
@@ -7,7 +7,7 @@ resource "azurerm_virtual_network" "main" {
 }
 
 resource "azurerm_subnet" "main" {
-  count                = var.virtual_network_new_or_existing == "new" ? 1 : 0
+  count                = var.virtual_network == "new" ? 1 : 0
   name                 = var.subnet_name
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main[0].name
@@ -59,7 +59,7 @@ resource "azurerm_network_interface" "main" {
 
   ip_configuration {
     name                          = "internal"
-    subnet_id                     = var.virtual_network_new_or_existing == "new" ? azurerm_subnet.main[0].id : local.subnet_id
+    subnet_id                     = var.virtual_network == "new" ? azurerm_subnet.main[0].id : local.subnet_id
     private_ip_address_allocation = "Dynamic"
     public_ip_address_id          = azurerm_public_ip.main.id
   }

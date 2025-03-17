@@ -2,7 +2,6 @@ locals {
   workload_settings = {
     customWorkload = {
       name            = "workload"
-      image           = var.custom_workload_image_address
       port            = var.custom_workload_port
       url_for_proxy   = "workload:${var.custom_workload_port}"
       extra_args      = join(" ", [for env in var.custom_workload_environment_variables : "-e ${env.name}=${env.value}"])

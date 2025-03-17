@@ -205,13 +205,13 @@ variable "container_memory" {
 }
 
 # Networking Configuration
-variable "virtual_network_new_or_existing" {
+variable "virtual_network" {
   type        = string
   default     = "new"
   description = "Should a new virtual network be created (new) or use an existing one (existing)"
   validation {
-    condition     = contains(["", "new", "existing"], var.virtual_network_new_or_existing)
-    error_message = "The virtual_network_new_or_existing must be either '', 'new', or 'existing'"
+    condition     = contains(["", "new", "existing"], var.virtual_network)
+    error_message = "The virtual_network must be either '', 'new', or 'existing'"
   }
 }
 
@@ -290,12 +290,6 @@ variable "key_vault_base_domain" {
   type        = string
   default     = "vault.azure.net"
   description = "The base domain for Key Vault"
-}
-
-variable "enable_key_vault" {
-  type        = bool
-  default     = true
-  description = "Enable confidential computing with hardware-based attestation and secure key release"
 }
 
 # Polaris Proxy Configuration

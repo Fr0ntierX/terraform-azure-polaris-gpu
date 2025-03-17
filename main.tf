@@ -9,7 +9,7 @@ locals {
     new      = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${azurerm_resource_group.main.name}/providers/Microsoft.Network/virtualNetworks/${var.virtual_network_name}"
   }
 
-  subnet_id = var.virtual_network_new_or_existing != "" ? "${local.vnet_id[var.virtual_network_new_or_existing]}/subnets/${var.subnet_name}" : null
+  subnet_id = var.virtual_network != "" ? "${local.vnet_id[var.virtual_network]}/subnets/${var.subnet_name}" : null
 }
 
 resource "azurerm_resource_group" "main" {
