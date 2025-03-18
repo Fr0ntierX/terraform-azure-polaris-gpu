@@ -1,7 +1,7 @@
 module "polaris_azure_gpu_module" {
-  source = "../"
+  source = "Fr0ntierX/polaris/azure-gpu"
 
-  subscription_id = "3bc57494-c0a6-4ee2-b44d-8b398b4a8162"
+  subscription_id = "your-subscription-id"
 
   name     = "polaris-gpu-example"
   location = "eastus2"
