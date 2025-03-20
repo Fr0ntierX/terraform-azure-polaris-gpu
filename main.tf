@@ -3,13 +3,6 @@ locals {
   vm_name        = "${local.sanitized_name}-vm"
   key_vault_name = "${local.sanitized_name}-vault"
   key_name       = "${local.sanitized_name}-key"
-
-  vnet_id = {
-    existing = var.virtual_network_resource_group != "" ? "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${var.virtual_network_resource_group}/providers/Microsoft.Network/virtualNetworks/${var.virtual_network_name}" : "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${azurerm_resource_group.main.name}/providers/Microsoft.Network/virtualNetworks/${var.virtual_network_name}"
-    new      = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${azurerm_resource_group.main.name}/providers/Microsoft.Network/virtualNetworks/${var.virtual_network_name}"
-  }
-
-  subnet_id = var.virtual_network != "" ? "${local.vnet_id[var.virtual_network]}/subnets/${var.subnet_name}" : null
 }
 
 resource "azurerm_resource_group" "main" {

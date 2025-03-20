@@ -1,17 +1,36 @@
-resource "azurerm_virtual_network" "main" {
-  count               = var.virtual_network == "new" ? 1 : 0
+data "azurerm_virtual_network" "existing" {
   name                = var.virtual_network_name
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  address_space       = var.virtual_network_address_prefixes
+  resource_group_name = var.virtual_network_resource_group
 }
 
-resource "azurerm_subnet" "main" {
-  count                = var.virtual_network == "new" ? 1 : 0
+output "available_subnets" {
+  value = data.azurerm_virtual_network.existing.subnets
+  description = "List of available subnets in the virtual network"
+}
+
+data "azurerm_subnet" "existing" {
+  count                = var.subnet_name != "" ? 1 : 0
   name                 = var.subnet_name
-  resource_group_name  = azurerm_resource_group.main.name
-  virtual_network_name = azurerm_virtual_network.main[0].name
-  address_prefixes     = [var.subnet_address_prefix]
+  virtual_network_name = data.azurerm_virtual_network.existing.name
+  resource_group_name  = var.virtual_network_resource_group
+}
+
+
+resource "azurerm_network_interface" "main" {
+  name                = "${local.vm_name}-nic"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = length(data.azurerm_subnet.existing) > 0 ? data.azurerm_subnet.existing[0].id : null
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.main.id
+  }
+
+  depends_on = [
+    azurerm_public_ip.main
+  ]
 }
 
 resource "azurerm_public_ip" "main" {
@@ -52,23 +71,6 @@ resource "azurerm_network_security_group" "main" {
   }
 }
 
-resource "azurerm_network_interface" "main" {
-  name                = "${local.vm_name}-nic"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = var.virtual_network == "new" ? azurerm_subnet.main[0].id : local.subnet_id
-    private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.main.id
-  }
-
-  depends_on = [
-    azurerm_public_ip.main,
-    azurerm_virtual_network.main
-  ]
-}
 
 resource "azurerm_network_interface_security_group_association" "main" {
   network_interface_id      = azurerm_network_interface.main.id
