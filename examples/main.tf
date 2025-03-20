@@ -3,6 +3,7 @@ module "polaris_azure_gpu_module" {
 
   subscription_id = "your-subscription-id"
 
+  # Core configuration
   name     = "polaris-gpu-example"
   location = "eastus2"
   zone     = "2"
@@ -12,17 +13,31 @@ module "polaris_azure_gpu_module" {
   authentication_type   = "password"
   admin_password_or_key = "YOUR_PASSWORD"
 
-  # Polaris Proxy Configuration
-  polaris_proxy_port          = 3000
+  # Network Configuration
+  virtual_network_name           = "your-network-vnet"
+  virtual_network_resource_group = "your-network-rg"
+  subnet_name                    = "default"
+
+  custom_workload = {
+    image_address = "example.azurecr.io/custom-workload:latest"
+    port          = 11434
+    registry = {
+      login_server = "YOUR_ACR_SERVER"
+      username     =  "YOUR_ACR_USERNAME"
+      password     = "YOUR_ACR_PASSWORD"
+    }
+  }
+
+  client_workload = {
+    image_address = "example.azurecr.io/client:latest"
+    port          = 8080
+    registry = {
+      login_server = "YOUR_ACR_SERVER"
+      username     =  "YOUR_ACR_USERNAME"
+      password     = "YOUR_ACR_PASSWORD"
+    }
+  }
+
+  # Polaris proxy configuration
   polaris_proxy_image_version = "latest"
-
-  # Workload Configuration
-  workload_type = "customWorkload"
-
-  custom_workload_image_address = "YOUR_ACR_SERVER/your-llm-image:latest"
-  custom_workload_port          = 11434
-
-  custom_workload_image_registry_login_server = "YOUR_ACR_SERVER"
-  custom_workload_image_registry_username     = "YOUR_ACR_USERNAME"
-  custom_workload_image_registry_password     = "YOUR_ACR_PASSWORD"
 }
