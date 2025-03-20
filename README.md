@@ -1,41 +1,23 @@
 # Azure Polaris GPU Terraform Module
 
-This Terraform module deploys a confidential GPU virtual machine on Azure with Polaris proxy for secure inference.
-
-## Features
-
-- Deploys an Azure Confidential VM with GPU (H100)
-- Sets up Polaris proxy for secure inference
-- Configures containerized workloads (custom, vLLM, Ollama, or TorchServe)
-- Creates a Key Vault with secure key release policy
-- Configures networking with appropriate security
-
-## Requirements
-
-- Terraform >= 0.14.9
-- Azure Provider ~> 4.22.0
-- Azure API Provider ~> 2.3.0
+This Terraform module deploys a Confidential GPU Virtual Machine (H100) on Azure, preconfigured with:  
+- Polaris Proxy for secure inference  
+- Optional AI workloads (custom, vLLM, Ollama, TorchServe)  
+- Hardware-backed Key Vault integration for secure key release  
+- Configurable networking with NSG rules
 
 ## Overview
-
-The Azure Polaris Terraform Module provisions confidential computing resources in Azure with hardware-backed security features. It deploys:
-
-- **Confidential Virtual Machine**: Protected by vTPM, Secure Boot, and hardware-based isolation
-- **Polaris Proxy Container**: Exposes a secure service with configurable encryption, CORS, and logging
-- **AI Workload Container**: Runs your chosen AI model (custom, vLLM, Ollama, or TorchServe)
-- **SKR Sidecar Container**: Handles secure key release protocol for attestation
-- **Key Vault**: Provides secure key management backed by hardware security modules
-
-For more detailed information about Polaris, please visit the [Polaris documentation](https://docs.fr0ntierx.com)
+1. **VM Deployment (H100)**: Creates a confidential VM with GPU (H100), enabling vTPM and secure boot.  
+2. **Polaris Proxy**: Exposes a secure endpoint to handle encrypted requests.  
+3. **AI Workload**: Runs your chosen containerized model, e.g., LLaMA, TorchServe, or any custom container.  
+4. **Optional Client Workload**: A container to interact with the main workload.  
+5. **Azure Key Vault**: Managed HSM key creation for secure key release (policy-based attestation).
 
 ## Requirements
-
-| Requirement        | Details                           |
-| ------------------ | --------------------------------- |
-| Terraform          | >= 1.0.0                          |
-| Azure Provider     | >= 4.22.0                         |
-| Azure API Provider | >= 2.3.0                          |
-| Azure Subscription | Active with necessary permissions |
+- Terraform ≥ 1.0.0  
+- Azure Provider ≥ 4.22.0  
+- Azure API Provider ≥ 2.3.0  
+- Active Azure subscription with the Microsoft.Network, Microsoft.KeyVault, Microsoft.ManagedIdentity, and Microsoft.Compute resource providers registered.
 
 ## Variables
 
@@ -57,41 +39,80 @@ For more detailed information about Polaris, please visit the [Polaris documenta
 | zone                  | string | Availability Zone for the VM    | "1"                         |
 | vm_size               | string | VM size (should be GPU-enabled) | "Standard_NCC40ads_H100_v5" |
 
-### Compute Resources
+### Workload Configuration
 
-| Name             | Type   | Description                                   | Default |
-| ---------------- | ------ | --------------------------------------------- | ------- |
-| container_cpu    | number | CPU cores for main workload container         | 1       |
-| container_memory | number | Memory size in GB for main workload container | 4       |
+#### Custom Workload
+
+| Name                   | Type         | Description                                                | Default |
+| ---------------------- | ------------ | ---------------------------------------------------------- | ------- |
+| custom_workload        | object       | Configuration for custom workload                          | N/A     |
+| - image_address        | string       | Container image address                                    | N/A     |
+| - port                 | number       | Port exposed by the container                              | 8080    |
+| - command              | string       | Optional command to run                                    | ""      |
+| - arguments            | list(string) | Optional command arguments                                 | []      |
+| - environment_variables| list(object) | Optional environment variables                             | []      |
+| - registry             | object       | Optional container registry configuration                  | null    |
+|   - login_server       | string       | Registry login server                                      | ""      |
+|   - username           | string       | Registry username                                          | ""      |
+|   - password           | string       | Registry password                                          | ""      |
+
+#### vLLM Workload
+
+| Name                   | Type   | Description            | Default |
+| ---------------------- | ------ | ---------------------- | ------- |
+| vllm_workload          | object | vLLM workload config   | N/A     |
+| - hf_token             | string | HuggingFace token      | ""      |
+| - vllm_model           | string | vLLM model name        | ""      |
+
+#### Ollama Workload
+
+| Name                   | Type   | Description               | Default                     |
+| ---------------------- | ------ | ------------------------- | --------------------------- |
+| ollama_workload        | object | Ollama workload config    | N/A                         |
+| - model_name           | string | Ollama model to load      | "llama3.2:1b-instruct-q4_0" |
+
+#### TorchServe Workload
+
+| Name                   | Type   | Description               | Default |
+| ---------------------- | ------ | ------------------------- | ------- |
+| torch_serve_workload   | object | TorchServe workload config| N/A     |
+| - model_archive_url    | string | URL to model archive      | ""      |
+
+#### Client Workload 
+
+| Name                   | Type         | Description                                                | Default |
+| ---------------------- | ------------ | ---------------------------------------------------------- | ------- |
+| client_workload        | object       | Configuration for optional client workload                 | N/A     |
+| - image_address        | string       | Container image address                                    | ""      |
+| - port                 | number       | Port exposed by the container                              | 8080    |
+| - command              | string       | Optional command to run                                    | ""      |
+| - arguments            | list(string) | Optional command arguments                                 | []      |
+| - environment_variables| list(object) | Optional environment variables                             | []      |
+| - registry             | object       | Optional container registry configuration                  | null    |
+|   - login_server       | string       | Registry login server                                      | ""      |
+|   - username           | string       | Registry username                                          | ""      |
+|   - password           | string       | Registry password                                          | ""      |
 
 ### Networking Configuration
 
-| Name                             | Type         | Description                     | Default         |
-| -------------------------------- | ------------ | ------------------------------- | --------------- |
-| virtual_network_new_or_existing  | string       | "new", "existing" or ""         | "new"           |
-| virtual_network_name             | string       | Name of the virtual network     | "vNet"          |
-| virtual_network_resource_group   | string       | Resource group of existing VNet | ""              |
-| virtual_network_address_prefixes | list(string) | Address prefixes for the VNet   | ["10.0.0.0/16"] |
-| subnet_name                      | string       | Name of the subnet              | "default"       |
-| subnet_address_prefix            | string       | Address prefix for the subnet   | "10.0.1.0/24"   |
-
-### Security & Encryption
-
-| Name                                   | Type         | Description                                   | Default       |
-| -------------------------------------- | ------------ | --------------------------------------------- | ------------- |
-| polaris_proxy_source_ranges            | list(string) | IP ranges allowed to access the Polaris proxy | ["0.0.0.0/0"] |
-| polaris_proxy_enable_input_encryption  | bool         | Enable input encryption                       | false         |
-| polaris_proxy_enable_output_encryption | bool         | Enable output encryption                      | false         |
+| Name                           | Type   | Description                                                   | Default |
+| ------------------------------ | ------ | ------------------------------------------------------------- | ------- |
+| virtual_network_name           | string | Name of the existing virtual network to use                   | N/A     |
+| virtual_network_resource_group | string | Resource group containing the existing virtual network        | N/A     |
+| subnet_name                    | string | Name of the existing subnet within the virtual network        | N/A     |
 
 ### Polaris Proxy Configuration
 
-| Name                         | Type   | Description                       | Default  |
-| ---------------------------- | ------ | --------------------------------- | -------- |
-| polaris_proxy_image_version  | string | Polaris proxy image version/tag   | "latest" |
-| polaris_proxy_port           | number | Port exposed by the Polaris proxy | 3000     |
-| polaris_proxy_enable_cors    | bool   | Enable CORS for API endpoints     | false    |
-| polaris_proxy_enable_logging | bool   | Enable enhanced logging           | true     |
-| maa_endpoint                 | string | Microsoft Attestation endpoint    | ""       |
+| Name                                | Type         | Description                                | Default     |
+| ----------------------------------- | ------------ | ------------------------------------------ | ----------- |
+| polaris_proxy_image_version         | string       | Polaris proxy image version/tag            | "latest"    |
+| polaris_proxy_port                  | number       | Port exposed by the Polaris proxy          | 3000        |
+| polaris_proxy_enable_cors           | bool         | Enable CORS for API endpoints              | false       |
+| polaris_proxy_enable_input_encryption| bool        | Enable encryption for input data           | false       |
+| polaris_proxy_enable_output_encryption| bool       | Enable encryption for output data          | false       |
+| polaris_proxy_enable_logging        | bool         | Enable enhanced logging                    | true        |
+| polaris_proxy_source_ranges         | list(string) | IP ranges allowed to access Polaris proxy  | ["0.0.0.0/0"]|
+| maa_endpoint                        | string       | URL for Microsoft Attestation service      | ""          |
 
 ### Key Vault Configuration
 
@@ -99,155 +120,98 @@ For more detailed information about Polaris, please visit the [Polaris documenta
 | --------------------- | ------ | ------------------------- | ----------------- |
 | key_vault_base_domain | string | Base domain for Key Vault | "vault.azure.net" |
 
-### Workload Configuration
 
-| Name          | Type   | Description                                                                            | Default |
-| ------------- | ------ | -------------------------------------------------------------------------------------- | ------- |
-| workload_type | string | Type of workload (customWorkload, vllmWorkload, ollamaWorkload, or torchServeWorkload) | N/A     |
+## Detailed Configuration & Examples
 
-#### Custom Workload Settings
+### Container Architecture
 
-| Name                                        | Type         | Description                   | Default |
-| ------------------------------------------- | ------------ | ----------------------------- | ------- |
-| custom_workload_image_address               | string       | Container image address       | ""      |
-| custom_workload_port                        | number       | Port exposed by the container | 8080    |
-| custom_workload_command                     | string       | Command to run                | ""      |
-| custom_workload_arguments                   | list(string) | Command arguments             | []      |
-| custom_workload_environment_variables       | list(object) | Environment variables         | []      |
-| custom_workload_image_registry_login_server | string       | Container registry server     | ""      |
-| custom_workload_image_registry_username     | string       | Registry username             | ""      |
-| custom_workload_image_registry_password     | string       | Registry password             | ""      |
+The module deploys several containerized applications on the H100 VM:
 
-#### vLLM Settings
+- **Polaris Proxy Container**: Front-facing service that handles API requests, manages authentication, encryption, and routes requests to the workload container. Exposes configurable port (default: 3000).
 
-| Name                     | Type   | Description       | Default |
-| ------------------------ | ------ | ----------------- | ------- |
-| vllm_workload_hf_token   | string | HuggingFace token | ""      |
-| vllm_workload_vllm_model | string | vLLM model name   | ""      |
+- **Main Workload Container**: Runs one of the following AI frameworks:
+  - **Custom Workload**: Your custom container image with ML model
+  - **vLLM**: Optimized container for serving LLMs from HuggingFace with vLLM
+  - **Ollama**: Local LLM serving with the Ollama framework
+  - **TorchServe**: PyTorch model serving framework
 
-#### Ollama Settings
+- **Client Workload Container** (Optional): Additional application that interacts with the main workload. Examples include:
+  - API frontends
+  - Preprocessing services
+  - Data anonymization layers
+  - Result formatters
 
-| Name              | Type   | Description          | Default                     |
-| ----------------- | ------ | -------------------- | --------------------------- |
-| ollama_model_name | string | Ollama model to load | "llama3.2:1b-instruct-q4_0" |
+- **Secure Key Release (SKR) Container**: Facilitates secure key management with Azure Key Vault, validating the confidential VM's attestation before accessing encryption keys.
 
-#### TorchServe Settings
+### VM Configuration & Security
 
-| Name              | Type   | Description          | Default |
-| ----------------- | ------ | -------------------- | ------- |
-| model_archive_url | string | URL to model archive | ""      |
+- **Confidential Computing**: The VM is deployed with AMD SEV-SNP confidential computing features.
+- **vTPM & Secure Boot**: Hardware-backed security features are enabled by default.
+- **Disk Encryption**: OS disk uses VMGuestStateOnly encryption mode.
+- **Network Security**: NSG rules limit access to SSH (22) and the Polaris Proxy port.
+- **System Managed Identity**: VM gets an identity for secure interaction with Key Vault.
 
-### Container Registry
+### Key Management
 
-| Name                  | Type   | Description                  | Default |
-| --------------------- | ------ | ---------------------------- | ------- |
-| registry_login_server | string | Custom registry login server | ""      |
-| registry_username     | string | Custom registry username     | ""      |
-| registry_password     | string | Custom registry password     | ""      |
-
-## Architecture
-
-This module provisions a confidential VM with GPU capabilities, running:
-
-1. **Polaris Proxy Container**: Secure API endpoint with optional encryption
-2. **Workload Container**: Your AI model (custom, vLLM, Ollama, or TorchServe)
-3. **Optional Client Container**: Additional workload that can interact with the main workload
-4. **Secure Key Release Container**: Facilitates secure key release for confidential computing
-
-The VM uses hardware-backed security features including vTPM and secure boot to protect your workloads.
-
-## Pre-deployment Requirements
+- **HSM-Backed Keys**: Keys stored in Azure Key Vault's Hardware Security Modules.
+- **Attestation Policy**: Keys are only released to validated confidential environments.
+- **Key Vault Access Control**: The VM's managed identity receives minimal permissions (Get, Release).
 
 ### Authentication and Permissions
 
-This module requires:
-
-1. An authenticated Azure session (via CLI, service principal, or managed identity)
-2. The `subscription_id` parameter must match your authenticated session's subscription
-3. The authenticated identity must have the following permissions:
+To deploy this module you need:
+1. Azure credentials with sufficient permissions:
    - **Contributor** role on the subscription or resource group
-   - **User Access Administrator** role (for managing identities)
-   - **Key Vault Administrator** role
+   - **User Access Administrator** role for managing identities
+   - **Key Vault Administrator** role for key vault operations
 
-### Required Resource Providers
+2. Required Resource Providers:
+   ```bash
+   az provider register --namespace Microsoft.Compute
+   az provider register --namespace Microsoft.KeyVault
+   az provider register --namespace Microsoft.Network
+   az provider register --namespace Microsoft.ManagedIdentity
+   ```
 
-Ensure these Azure resource providers are registered in your subscription:
+3. An existing Virtual Network and subnet.
 
-```bash
-az provider register --namespace Microsoft.ContainerInstance
-az provider register --namespace Microsoft.ContainerRegistry
-az provider register --namespace Microsoft.KeyVault
-az provider register --namespace Microsoft.Network
-az provider register --namespace Microsoft.ManagedIdentity
-```
 
-## Usage Examples
-
-### Basic Usage with Custom Workload
-
+## Example
 ```hcl
 module "polaris_azure_gpu_module" {
-  source = "Fr0ntierX/polaris/azure-gpu"
+  source = "../"
 
-  subscription_id = "your-subscription-id"
-
-  name     = "polaris-gpu-example"
-  location = "eastus2"
-  zone     = "2"
+  subscription_id = "YOUR-SUBSCRIPTION-ID"
+  name            = "polaris-h100"
+  location        = "eastus2"
+  zone            = "2"
 
   admin_username        = "azureuser"
+  admin_password_or_key = "MY_PASSWORD"
   authentication_type   = "password"
-  admin_password_or_key = "YOUR_PASSWORD"
 
-  polaris_proxy_port          = 3000
-  polaris_proxy_image_version = "latest"
+  virtual_network_name           = "my-precreated-vnet"
+  virtual_network_resource_group = "my-network-rg"
+  subnet_name                    = "my-subnet"
+  
+  custom_workload = {
+    image_address = "example.azurecr.io/custom-workload:latest"
+    port          = 11434
+    registry = {
+      login_server = "example.azurecr.io"
+      username     = "registry_user"
+      password     = "registry_password"
+    }
+  }
 
-  workload_type = "customWorkload"
-
-  custom_workload_image_address = "YOUR_ACR_SERVER/your-llm-image:latest"
-  custom_workload_port          = 11434
-
-  custom_workload_image_registry_login_server = "YOUR_ACR_SERVER"
-  custom_workload_image_registry_username     = "YOUR_ACR_USERNAME"
-  custom_workload_image_registry_password     = "YOUR_ACR_PASSWORD"
-
-
+  polaris_proxy_port = 3000
+  polaris_proxy_enable_input_encryption = true
+  polaris_proxy_enable_output_encryption = true
+  polaris_proxy_enable_logging = true
 }
 ```
 
-## Deployment Steps
-
-1. Initialize Terraform:
-
-   ```shell
-   terraform init
-   ```
-
-2. Plan the deployment:
-
-   ```shell
-   terraform plan
-   ```
-
-3. Apply the configuration:
-
-   ```shell
-   terraform apply
-   ```
-
-4. Access your Polaris service:
-   ```shell
-   curl $(terraform output -raw polaris_proxy_endpoint)
-   ```
-
-## Notes
-
-- When using private networking, ensure that your Azure subscription has the necessary VNET integration capabilities enabled
-- Confidential computing features are region-dependent; check Azure documentation for availability
-- For production workloads, consider using Azure DevOps or GitHub Actions for deployment pipelines
-
-## Further Resources
-
-- [Azure Confidential Computing Documentation](https://docs.microsoft.com/azure/confidential-computing/)
-- [Azure Container Instances Documentation](https://docs.microsoft.com/azure/container-instances/)
-- [Azure Key Vault Documentation](https://docs.microsoft.com/azure/key-vault/)
+## Further Info
+- [Azure Confidential Computing](https://learn.microsoft.com/azure/confidential-computing/)
+- [Azure Key Vault Documentation](https://learn.microsoft.com/azure/key-vault/)
+- [Azure GPU VM Sizes](https://learn.microsoft.com/azure/virtual-machines/sizes-gpu)
