@@ -2,25 +2,25 @@ locals {
   workload_settings = {
     customWorkload = {
       name            = "workload"
-      port            = var.custom_workload_port
-      url_for_proxy   = "workload:${var.custom_workload_port}"
-      extra_args      = join(" ", [for env in var.custom_workload_environment_variables : "-e ${env.name}=${env.value}"])
-      command         = trimspace("${var.custom_workload_command} ${join(" ", var.custom_workload_arguments)}")
-      container_image = var.custom_workload_image_address
+      port            = var.custom_workload.port
+      url_for_proxy   = "workload:${var.custom_workload.port}"
+      extra_args      = join(" ", [for env in var.custom_workload.environment_variables : "-e ${env.name}=${env.value}"])
+      container_image = var.custom_workload.image_address
+      command         = trimspace("${var.custom_workload.command} ${join(" ", var.custom_workload.arguments)}")
     }
     vllmWorkload = {
       name            = "vllm-workload"
       port            = "8000"
       url_for_proxy   = "vllm-workload:8000"
-      extra_args      = "-e HF_TOKEN=${var.vllm_workload_hf_token} -e POLARIS_VLLM_MODEL=${var.vllm_workload_vllm_model}"
+      extra_args      = "-e HF_TOKEN=${var.vllm_workload.hf_token} -e POLARIS_VLLM_MODEL=${var.vllm_workload.vllm_model}"
       container_image = "fr0ntierxpublic.azurecr.io/polaris-llm-gpu-vllm:latest"
-      command         = ""
+      command         = "" 
     }
     ollamaWorkload = {
       name            = "ollama"
       port            = "11434"
       url_for_proxy   = "ollama:11434"
-      extra_args      = "-e POLARIS_LLM_OLLAMA_MODEL=${var.ollama_model_name}"
+      extra_args      = "-e POLARIS_LLM_OLLAMA_MODEL=${var.ollama_workload.model_name}"
       container_image = "fr0ntierxpublic.azurecr.io/polaris-llm-gpu-ollama:latest"
       command         = ""
     }
@@ -28,27 +28,52 @@ locals {
       name            = "workload"
       port            = "8080"
       url_for_proxy   = "workload:8080"
-      extra_args      = "-e POLARIS_AI_MAR_FILE_URL=${var.model_archive_url}"
+      extra_args      = "-e POLARIS_AI_MAR_FILE_URL=${var.torch_serve_workload.model_archive_url}"
       container_image = "fr0ntierxpublic.azurecr.io/polaris-ai-gpu-torchserve:latest"
       command         = ""
     }
   }
 
-  selected_workload = lookup(local.workload_settings, var.workload_type, local.workload_settings.customWorkload)
+  has_custom_workload      = var.custom_workload.image_address != ""
+  has_vllm_workload        = var.vllm_workload.vllm_model != "" 
+  has_ollama_workload      = var.ollama_workload.model_name != "llama3.2:1b-instruct-q4_0"
+  has_torch_serve_workload = var.torch_serve_workload.model_archive_url != ""
 
-  proxy_workload_url = var.client_workload_image_address == "" ? local.selected_workload.url_for_proxy : "client-workload:${var.client_workload_port}"
+  workload_count = (
+    (local.has_custom_workload ? 1 : 0) +
+    (local.has_vllm_workload ? 1 : 0) +
+    (local.has_ollama_workload ? 1 : 0) +
+    (local.has_torch_serve_workload ? 1 : 0)
+  )
+
+  workload_validation = local.workload_count <= 1 ? true : tobool(
+    file("ERROR: Multiple workload configurations detected. Please specify only one workload type.")
+  )
+
+  detected_workload_type = (
+    local.has_custom_workload ? "customWorkload" : (
+      local.has_vllm_workload ? "vllmWorkload" : (
+        local.has_ollama_workload ? "ollamaWorkload" : (
+          local.has_torch_serve_workload ? "torchServeWorkload" :
+          "customWorkload"
+    )))
+  )
+
+  selected_workload = local.workload_validation ? local.workload_settings[local.detected_workload_type] : null
+
+  proxy_workload_url = local.selected_workload.url_for_proxy
 
   cloud_init_parts = {
     login = join("\n", [
-      "docker login ${var.custom_workload_image_registry_login_server} --username ${var.custom_workload_image_registry_username} --password ${var.custom_workload_image_registry_password}",
-      var.client_workload_image_address != "" ? "docker login ${var.client_workload_image_registry_login_server} --username ${var.client_workload_image_registry_username} --password ${var.client_workload_image_registry_password}" : ""
+      "docker login ${var.custom_workload.registry.login_server} --username ${var.custom_workload.registry.username} --password ${var.custom_workload.registry.password}",
+      var.client_workload.image_address != "" ? "docker login ${var.client_workload.registry.login_server} --username ${var.client_workload.registry.username} --password ${var.client_workload.registry.password}" : ""
     ])
 
     setup = join("\n", [
       "docker network create secure-network",
       "docker pull fr0ntierxpublic.azurecr.io/polaris-proxy${startswith(var.polaris_proxy_image_version, "@sha256") ? var.polaris_proxy_image_version : ":${var.polaris_proxy_image_version}"}",
       "docker pull ${local.selected_workload.container_image}",
-      var.client_workload_image_address != "" ? "docker pull ${var.client_workload_image_address}" : "",
+      var.client_workload.image_address != "" ? "docker pull ${var.client_workload.image_address}" : "",
       "docker pull fr0ntierxpublic.azurecr.io/polaris-azure-skr:latest"
     ])
 
@@ -92,14 +117,14 @@ locals {
         ${local.selected_workload.command}
     EOT
 
-    run_client = var.client_workload_image_address != "" ? format(
-      "docker run -d --network secure-network --name client-workload -p %s:%s %s %s %s %s",
-      var.client_workload_port,
-      var.client_workload_port,
-      join(" ", [for env in var.client_workload_environment_variables : "-e ${env.name}=${env.value}"]),
-      var.client_workload_image_address,
-      var.client_workload_command,
-      join(" ", var.client_workload_arguments)
+    run_client = var.client_workload.image_address != "" ? format(
+      "docker run -d --network secure-network --name client-workload -p %s:%s %s %s %s %s\n",
+      var.client_workload.port,
+      var.client_workload.port,
+      join(" ", [for env in var.client_workload.environment_variables : "-e ${env.name}=${env.value}"]),
+      var.client_workload.image_address,
+      var.client_workload.command,
+      join(" ", var.client_workload.arguments)
     ) : ""
   }
 
@@ -109,7 +134,7 @@ locals {
     split("\n", local.cloud_init_parts.run_skr),
     split("\n", local.cloud_init_parts.run_proxy),
     split("\n", local.cloud_init_parts.run_workload),
-    var.client_workload_image_address != "" ? split("\n", local.cloud_init_parts.run_client) : []
+    var.client_workload.image_address != "" ? split("\n", local.cloud_init_parts.run_client) : []
   ]))
 
   cloud_init_script = <<-EOT
