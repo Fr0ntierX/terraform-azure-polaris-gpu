@@ -48,67 +48,88 @@ variable "vm_size" {
   description = "The size of the VM"
 }
 
-# Workload Types
-variable "workload_type" {
-  type        = string
-  description = "Type of workload to run (customWorkload, vllmWorkload, ollamaWorkload, or torchServeWorkload)"
-  validation {
-    condition     = contains(["customWorkload", "vllmWorkload", "ollamaWorkload", "torchServeWorkload"], var.workload_type)
-    error_message = "The workload_type must be one of: customWorkload, vllmWorkload, ollamaWorkload, torchServeWorkload"
+
+# Custom Workload Configuration
+variable "custom_workload" {
+  type = object({
+    image_address         = string
+    port                  = number
+    command               = optional(string, "")  
+    arguments             = optional(list(string), []) 
+    environment_variables = optional(list(object({
+      name  = string
+      value = string
+    })), [])
+    registry              = optional(object({  
+      login_server = string
+      username     = string
+      password     = string
+    }), null)
+  })
+  description = "Configuration for custom workload"
+}
+
+# VLLM Workload Configuration
+variable "vllm_workload" {
+  type = object({
+    hf_token  = string
+    vllm_model = string
+  })
+  default = {
+    hf_token  = ""
+    vllm_model = ""
   }
+  description = "Configuration for VLLM workload"
+}
+
+# Ollama Workload Configuration
+variable "ollama_workload" {
+  type = object({
+    model_name = string
+  })
+  default = {
+    model_name = "llama3.2:1b-instruct-q4_0"
+  }
+  description = "Configuration for Ollama workload"
+}
+
+# TorchServe Workload Configuration
+variable "torch_serve_workload" {
+  type = object({
+    model_archive_url = string
+  })
+  default = {
+    model_archive_url = ""
+  }
+  description = "Configuration for TorchServe workload"
 }
 
 # Client Workload Configuration
-variable "client_workload_image_address" {
-  type        = string
-  default     = ""
-  description = "Container image address for client workload"
-}
-
-variable "client_workload_port" {
-  type        = number
-  default     = 8080
-  description = "Port exposed by the client workload container"
-}
-
-variable "client_workload_command" {
-  type        = string
-  default     = ""
-  description = "Command for client workload container"
-}
-
-variable "client_workload_arguments" {
-  type        = list(string)
-  default     = []
-  description = "Command arguments for client workload container"
-}
-
-variable "client_workload_environment_variables" {
-  type = list(object({
-    name  = string
-    value = string
-  }))
-  default     = []
-  description = "Environment variables for client workload container"
-}
-
-variable "client_workload_image_registry_login_server" {
-  type        = string
-  default     = ""
-  description = "Registry login server for client workload image"
-}
-
-variable "client_workload_image_registry_username" {
-  type        = string
-  default     = ""
-  description = "Registry username for client workload image"
-}
-
-variable "client_workload_image_registry_password" {
-  type        = string
-  default     = ""
-  sensitive   = true
-  description = "Registry password for client workload image"
+variable "client_workload" {
+  type = object({
+    image_address         = string
+    port                  = number
+    command               = optional(string, "") 
+    arguments             = optional(list(string), [])
+    environment_variables = optional(list(object({
+      name  = string
+      value = string
+    })), [])
+    registry              = optional(object({ 
+      login_server = string
+      username     = string
+      password     = string
+    }), null)
+  })
+  default = {
+    image_address         = ""
+    port                  = 8080
+    command               = ""
+    arguments             = []
+    environment_variables = []
+    registry              = null
+  }
+  description = "Configuration for an optional client workload that interacts with the main workload"
 }
 
 # Custom Workload Configuration
@@ -204,85 +225,20 @@ variable "container_memory" {
   description = "Memory size in GB for main workload container"
 }
 
-# Networking Configuration
-variable "virtual_network" {
-  type        = string
-  default     = "new"
-  description = "Should a new virtual network be created (new) or use an existing one (existing)"
-  validation {
-    condition     = contains(["", "new", "existing"], var.virtual_network)
-    error_message = "The virtual_network must be either '', 'new', or 'existing'"
-  }
-}
-
-variable "new_vnet_enabled" {
-  type        = bool
-  default     = true
-  description = "Whether to create a new virtual network (true) or use an existing one (false)"
-}
-
-variable "networking_type" {
-  type    = string
-  default = "Public"
-  validation {
-    condition     = contains(["Public", "Private"], var.networking_type)
-    error_message = "The networking_type must be either 'Public' or 'Private'."
-  }
-  description = "Networking type for the container group (Public or Private)"
-}
-
-variable "dns_name_label" {
-  type        = string
-  default     = ""
-  description = "DNS name label for public IP (leave empty for auto-generated name)"
-}
-
+# Networking Configuration - Only using existing VNets
 variable "virtual_network_name" {
   type        = string
-  default     = "vNet"
-  description = "Name of the virtual network"
-}
-
-variable "vnet_name" {
-  type        = string
-  default     = ""
-  description = "Name of the existing virtual network when create_new_vnet=false"
+  description = "Name of the existing virtual network to use"
 }
 
 variable "virtual_network_resource_group" {
   type        = string
-  default     = ""
-  description = "Resource group containing the virtual network"
-}
-
-variable "vnet_resource_group" {
-  type        = string
-  default     = ""
-  description = "Resource group containing the virtual network (for existing VNet, leave empty to use the module's resource group)"
-}
-
-variable "virtual_network_address_prefixes" {
-  type        = list(string)
-  default     = ["10.0.0.0/16"]
-  description = "Address prefixes for the virtual network"
-}
-
-variable "vnet_address_space" {
-  type        = list(string)
-  default     = ["10.0.0.0/16"]
-  description = "Address space for a new virtual network"
+  description = "Resource group containing the existing virtual network (must be provided)"
 }
 
 variable "subnet_name" {
   type        = string
-  default     = "default"
-  description = "Name of the subnet"
-}
-
-variable "subnet_address_prefix" {
-  type        = string
-  default     = "10.0.1.0/24"
-  description = "Address prefix for the subnet"
+  description = "Name of the existing subnet within the virtual network"
 }
 
 # Key Vault Configuration
