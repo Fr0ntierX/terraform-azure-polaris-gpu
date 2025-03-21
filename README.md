@@ -204,10 +204,8 @@ module "polaris_azure_gpu_module" {
     }
   }
 
-  polaris_proxy_port = 3000
   polaris_proxy_enable_input_encryption = true
   polaris_proxy_enable_output_encryption = true
-  polaris_proxy_enable_logging = true
 }
 ```
 
